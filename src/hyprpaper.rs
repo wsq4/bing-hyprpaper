@@ -59,14 +59,11 @@ impl Hyprpaper {
         }
     }
 
-    pub async fn preload_all_wallpapers(paths: &[String]) {
+    pub async fn preload_all_wallpapers(paths: &[String]) -> Result<(), std::io::Error> {
         for path in paths {
-            if let Err(e) = Self::preload_wallpaper(path).await {
-                log::error!("Failed to preload wallpaper {}: {}", path, e);
-                if let Err(e) = Self::reload_wallpaper(path).await {
-                    log::error!("Failed to reload wallpaper {}: {}", path, e);
-                }
-            }
+            Self::preload_wallpaper(path).await?;
+            Self::reload_wallpaper(path).await?;
         }
+        Ok(())
     }
 }

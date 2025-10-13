@@ -186,7 +186,7 @@ impl<'a> App<'a> {
             });
             let paths = futures::future::join_all(paths_tasks).await;
 
-            Hyprpaper::preload_all_wallpapers(&paths).await;
+            Hyprpaper::preload_all_wallpapers(&paths).await.map_err(AppError::IoError)?;
         }
 
         let mut ticker = tokio::time::interval(Duration::from_secs(self.args.interval));
