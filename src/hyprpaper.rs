@@ -3,13 +3,14 @@ use tokio::process::Command;
 pub struct Hyprpaper;
 
 impl Hyprpaper {
+    const PROGRAM_NAME: &str = "/etc/profiles/per-user/wsq/bin/hyprctl";
     const DISPATCHER: &str = "hyprpaper";
     const PRELOAD_CMD: &str = "preload";
     const RELOAD_CMD: &str = "reload";
     const SET_CMD: &str = "wallpaper";
 
     pub async fn reload_wallpaper(path: &str) -> Result<(), std::io::Error> {
-        let result = Command::new("hyprctl")
+        let result = Command::new(Self::PROGRAM_NAME)
             .arg(Self::DISPATCHER)
             .arg(Self::RELOAD_CMD)
             .arg(path)
@@ -26,7 +27,7 @@ impl Hyprpaper {
     }
 
     pub async fn preload_wallpaper(path: &str) -> Result<(), std::io::Error> {
-        let result = Command::new("hyprctl")
+        let result = Command::new(Self::PROGRAM_NAME)
             .arg(Self::DISPATCHER)
             .arg(Self::PRELOAD_CMD)
             .arg(path)
@@ -43,7 +44,7 @@ impl Hyprpaper {
     }
 
     pub async fn set_wallpaper(path: &str) -> Result<(), std::io::Error> {
-        let result = Command::new("hyprctl")
+        let result = Command::new(Self::PROGRAM_NAME)
             .arg(Self::DISPATCHER)
             .arg(Self::SET_CMD)
             .arg(format!(",{}", path))
