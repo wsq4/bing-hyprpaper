@@ -38,9 +38,9 @@ pub struct Image {
     // pub enddate: String,
     pub url: String,
     // pub urlbase: String,
-    // pub copyright: String,
-    // pub copyrightlink: String,
-    // pub title: String,
+    pub copyright: String,
+    pub copyrightlink: String,
+    pub title: String,
     // pub quiz: String,
     // pub wp: bool,
     pub hsh: String,
@@ -48,6 +48,23 @@ pub struct Image {
     // pub top: u8,
     // pub bot: u8,
     // pub hs: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImageMetaData {
+    pub copyright: String,
+    pub copyrightlink: String,
+    pub title: String,
+}
+
+impl From<& Image> for  ImageMetaData{
+    fn from(value: & Image) -> Self {
+        ImageMetaData {
+            copyright: value.copyright.clone(),
+            copyrightlink: value.copyrightlink.clone(),
+            title: value.title.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

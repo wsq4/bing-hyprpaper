@@ -30,4 +30,8 @@ pub struct Args {
     /// Refresh image list interval in hours
     #[arg(short, long, default_value_t = 6)]
     pub refresh_interval: u64,
+
+    /// Place to output current wallpaper info
+    #[arg(short, long, default_value = "./current_wallpaper.json")]
+    pub current_wallpaper_info: String,
 }

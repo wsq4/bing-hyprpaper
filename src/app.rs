@@ -33,6 +33,13 @@ impl<'a> App<'a> {
             std::fs::create_dir_all(&storage_path).map_err(AppError::IoError)?;
         }
 
+        let current_wallpaper_info_path = PathBuf::from(&args.current_wallpaper_info);
+        if let Some(parent) = current_wallpaper_info_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(AppError::IoError)?;
+            }
+        }
+
         let file_store = Arc::new(RwLock::new(Vec::new()));
         let downloader = crate::download::Downloader::new(args.width, args.height, storage_path, args.max_images as u8);
         let last_download = Arc::new(RwLock::new(
@@ -92,6 +99,13 @@ impl<'a> App<'a> {
                 } else {
                     log::info!("Removed old image: {:?}", item.path);
                 }
+
+                let meta_path = item.path.with_extension("json");
+                if let Err(e) = tokio::fs::remove_file(&meta_path).await {
+                    log::error!("Failed to remove metadata file {:?}: {}", meta_path, e);
+                } else {
+                    log::info!("Removed old metadata: {:?}", meta_path);
+                }
             }
         }
 
@@ -130,7 +144,7 @@ impl<'a> App<'a> {
         let mut store = self.file_store.write().await;
         for (entry, created) in entries {
             let path = entry.path();
-            if path.is_file() {
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("jpg") {
                 store.push(ImageStoreItem {
                     path,
                     file_created: created.unwrap_or(SystemTime::now()),
@@ -151,6 +165,10 @@ impl<'a> App<'a> {
         let selected = &store[idx];
 
         let path = fs::canonicalize(&selected.path).await.map_err(AppError::IoError)?;
+        let meta_path = path.with_extension("json");
+        
+        tokio::fs::copy(&meta_path, &self.args.current_wallpaper_info).await.map_err(AppError::IoError)?;
+
         match Hyprpaper::set_wallpaper(&path.to_string_lossy().to_string()).await {
             Ok(_) => {
                 log::info!("Set wallpaper to: {:?}", selected.path);

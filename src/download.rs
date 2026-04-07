@@ -3,7 +3,7 @@ use futures_util::TryStreamExt;
 use thiserror::Error;
 use tokio_util::io::StreamReader;
 
-use crate::model::{ApiResponse, Image, ImageStoreItem, Query};
+use crate::model::{ApiResponse, Image, ImageMetaData, ImageStoreItem, Query};
 
 pub struct Downloader {
     pub width: u32,
@@ -79,6 +79,12 @@ impl Downloader {
         tokio::io::copy(&mut reader, &mut file).await.map_err(DownloadError::IoError)?;
 
         log::info!("Image saved to: {:?}", file_path);
+
+        let meta_data_path = file_path.with_extension("json");
+        let meta_data = ImageMetaData::from(image);
+        let meta_data_json = serde_json::to_string(&meta_data).map_err(|e| DownloadError::IoError(tokio::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        tokio::fs::write(&meta_data_path, meta_data_json).await.map_err(DownloadError::IoError)?;
+        log::info!("Metadata saved to: {:?}", meta_data_path);
 
         Ok(Some(ImageStoreItem {
             path: file_path,
