@@ -60,18 +60,7 @@ impl<'a> App<'a> {
                     if let Ok(opt) = downloader.download(img).await {
                         if let Some(item) = opt {
                             let mut store = file_store.write().await;
-                            let path = fs::canonicalize(&item.path).await.unwrap_or(item.path.clone());
-
                             store.push(item);
-
-                            match Hyprpaper::preload_wallpaper(&path.to_string_lossy().to_string()).await {
-                                Ok(_) => {
-                                    log::info!("Preloaded wallpaper: {:?}", path);
-                                },
-                                Err(_) => {
-                                    log::error!("Failed to preload wallpaper: {:?}", path);
-                                },
-                            };
                         } else {
                             log::info!("Image already exists, skipped: {:?}", img.url);
                         }
@@ -177,18 +166,6 @@ impl<'a> App<'a> {
     pub async fn run(&self) -> Result<(), AppError> {
         self.load_existing_images().await?;
         
-        {
-            let store = self.file_store.read().await;
-            let paths_tasks = store.iter().map(|item| async move {
-                fs::canonicalize(&item.path).await
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default()
-            });
-            let paths = futures::future::join_all(paths_tasks).await;
-
-            Hyprpaper::preload_all_wallpapers(&paths).await.map_err(AppError::IoError)?;
-        }
-
         let mut ticker = tokio::time::interval(Duration::from_secs(self.args.interval));
 
         loop {
