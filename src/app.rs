@@ -5,8 +5,11 @@ use std::{
 };
 
 use futures::{StreamExt, future};
+use nix::{libc, unistd::mkfifo};
 use thiserror::Error;
-use tokio::{fs::{self, DirEntry}, sync::RwLock, time::Instant};
+use tokio::{
+    fs::{self, DirEntry}, io::AsyncWriteExt, sync::RwLock, time::Instant
+};
 use tokio_stream::wrappers::ReadDirStream;
 
 use crate::{args::Args, hyprpaper::Hyprpaper, model::ImageStoreItem};
@@ -16,6 +19,7 @@ pub struct App<'a> {
     pub file_store: Arc<RwLock<Vec<ImageStoreItem>>>,
     pub downloader: crate::download::Downloader,
     pub last_download: Arc<RwLock<tokio::time::Instant>>,
+    pub current_wallpaper_info_pipe: PathBuf,
 }
 
 #[derive(Error, Debug)]
@@ -41,16 +45,43 @@ impl<'a> App<'a> {
         }
 
         let file_store = Arc::new(RwLock::new(Vec::new()));
-        let downloader = crate::download::Downloader::new(args.width, args.height, storage_path, args.max_images as u8);
+        let downloader = crate::download::Downloader::new(
+            args.width,
+            args.height,
+            storage_path,
+            args.max_images as u8,
+        );
         let last_download = Arc::new(RwLock::new(
             Instant::now() - Duration::from_secs(args.refresh_interval * 3600),
         ));
+
+        let current_wallpaper_info_pipe = current_wallpaper_info_path.with_extension("fifo");
+        if current_wallpaper_info_pipe.exists() {
+            std::fs::remove_file(&current_wallpaper_info_pipe).map_err(AppError::IoError)?;
+        }
+
+        mkfifo(
+            &current_wallpaper_info_pipe,
+            nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
+        )
+        .map_err(|e| {
+            AppError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to create FIFO: {}", e),
+            ))
+        })?;
+
+        log::info!(
+            "current wallpaper info pipe: {:?}",
+            current_wallpaper_info_pipe
+        );
 
         Ok(App {
             args,
             file_store,
             downloader,
             last_download,
+            current_wallpaper_info_pipe,
         })
     }
 
@@ -164,35 +195,67 @@ impl<'a> App<'a> {
         let idx = rand::random::<u64>() as usize % store.len();
         let selected = &store[idx];
 
-        let path = fs::canonicalize(&selected.path).await.map_err(AppError::IoError)?;
+        let path = fs::canonicalize(&selected.path)
+            .await
+            .map_err(AppError::IoError)?;
         let meta_path = path.with_extension("json");
-        
+
         let wallpaper_info_path = PathBuf::from(&self.args.current_wallpaper_info);
         if wallpaper_info_path.exists() {
-            tokio::fs::remove_file(&wallpaper_info_path).await.map_err(AppError::IoError)?;
+            tokio::fs::remove_file(&wallpaper_info_path)
+                .await
+                .map_err(AppError::IoError)?;
         }
-        tokio::fs::symlink(&meta_path, &wallpaper_info_path).await.map_err(AppError::IoError)?;
+        tokio::fs::symlink(&meta_path, &wallpaper_info_path)
+            .await
+            .map_err(AppError::IoError)?;
         let current_wallpaper_path = wallpaper_info_path.with_extension("jpg");
         if current_wallpaper_path.exists() {
-            tokio::fs::remove_file(&current_wallpaper_path).await.map_err(AppError::IoError)?;
+            tokio::fs::remove_file(&current_wallpaper_path)
+                .await
+                .map_err(AppError::IoError)?;
         }
-        tokio::fs::symlink(&path, &current_wallpaper_path).await.map_err(AppError::IoError)?;
+        tokio::fs::symlink(&path, &current_wallpaper_path)
+            .await
+            .map_err(AppError::IoError)?;
+
+        let meta = tokio::fs::read_to_string(&meta_path)
+            .await
+            .map_err(AppError::IoError)?;
+        // tokio::fs::write(&self.current_wallpaper_info_pipe, meta).await.map_err(AppError::IoError)?;
+        let mut pipe = tokio::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&self.current_wallpaper_info_pipe)
+            .await;
+
+        match pipe {
+            Ok(mut p) => {
+                p.write_all(meta.as_bytes()).await.map_err(AppError::IoError)?;
+            }
+            Err(e) => {
+                log::warn!("Failed to open pipe for writing: {}", e);
+            }
+        }
 
         match Hyprpaper::set_wallpaper(&path.to_string_lossy().to_string()).await {
             Ok(_) => {
                 log::info!("Set wallpaper to: {:?}", selected.path);
                 Ok(())
-            },
+            }
             Err(e) => {
                 log::error!("Failed to set wallpaper: {}", e);
-                Err(AppError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "Failed to set wallpaper")))
-            },
+                Err(AppError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to set wallpaper",
+                )))
+            }
         }
     }
 
     pub async fn run(&self) -> Result<(), AppError> {
         self.load_existing_images().await?;
-        
+
         let mut ticker = tokio::time::interval(Duration::from_secs(self.args.interval));
 
         loop {
