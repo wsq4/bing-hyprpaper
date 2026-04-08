@@ -7,7 +7,6 @@ impl Hyprpaper {
     const DISPATCHER: &str = "hyprpaper";
     const SET_CMD: &str = "wallpaper";
 
-
     pub async fn set_wallpaper(path: &str) -> Result<(), std::io::Error> {
         let result = Command::new(Self::PROGRAM_NAME)
             .arg(Self::DISPATCHER)
