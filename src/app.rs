@@ -167,8 +167,15 @@ impl<'a> App<'a> {
         let path = fs::canonicalize(&selected.path).await.map_err(AppError::IoError)?;
         let meta_path = path.with_extension("json");
         
-        tokio::fs::symlink(&meta_path, &self.args.current_wallpaper_info).await.map_err(AppError::IoError)?;
-        let current_wallpaper_path = PathBuf::from(&self.args.current_wallpaper_info).with_extension("jpg");
+        let wallpaper_info_path = PathBuf::from(&self.args.current_wallpaper_info);
+        if wallpaper_info_path.exists() {
+            tokio::fs::remove_file(&wallpaper_info_path).await.map_err(AppError::IoError)?;
+        }
+        tokio::fs::symlink(&meta_path, &wallpaper_info_path).await.map_err(AppError::IoError)?;
+        let current_wallpaper_path = wallpaper_info_path.with_extension("jpg");
+        if current_wallpaper_path.exists() {
+            tokio::fs::remove_file(&current_wallpaper_path).await.map_err(AppError::IoError)?;
+        }
         tokio::fs::symlink(&path, &current_wallpaper_path).await.map_err(AppError::IoError)?;
 
         match Hyprpaper::set_wallpaper(&path.to_string_lossy().to_string()).await {
