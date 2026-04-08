@@ -20,8 +20,7 @@ impl Hyprpaper {
             Ok(())
         } else {
             let err_msg = String::from_utf8_lossy(&result.stderr);
-            log::error!("Failed to set wallpaper: {}: {}", path, err_msg);
-            Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg))
+            panic!("Failed to set wallpaper: {}: {}", path, err_msg);
         }
     }
 }
