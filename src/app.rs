@@ -168,14 +168,10 @@ impl<'a> App<'a> {
         let meta_path = path.with_extension("json");
         
         let wallpaper_info_path = PathBuf::from(&self.args.current_wallpaper_info);
-        if wallpaper_info_path.exists() {
-            tokio::fs::remove_file(&wallpaper_info_path).await.map_err(AppError::IoError)?;
-        }
+        _ = tokio::fs::remove_file(&wallpaper_info_path).await;
         tokio::fs::symlink(&meta_path, &wallpaper_info_path).await.map_err(AppError::IoError)?;
         let current_wallpaper_path = wallpaper_info_path.with_extension("jpg");
-        if current_wallpaper_path.exists() {
-            tokio::fs::remove_file(&current_wallpaper_path).await.map_err(AppError::IoError)?;
-        }
+        _ = tokio::fs::remove_file(&current_wallpaper_path).await;
         tokio::fs::symlink(&path, &current_wallpaper_path).await.map_err(AppError::IoError)?;
 
         match Hyprpaper::set_wallpaper(&path.to_string_lossy().to_string()).await {

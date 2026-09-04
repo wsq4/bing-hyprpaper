@@ -34,7 +34,7 @@ fn main() {
                 println!("Daemon started successfully");
                 main_loop(&args);
             },
-            Err(e) => panic!("Error, {}", e),
+            Err(e) => eprintln!("Error, {}", e),
         }
 
     } else {
